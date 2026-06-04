@@ -1,3 +1,6 @@
 node_modules
 .env
-view-users.js
+backup-users-json.js
+restore-users.js
+delete-test-users.js
+init-db.js
