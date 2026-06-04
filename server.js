@@ -1,28 +1,17 @@
+require('dotenv').config();
+const pool = require('./db');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
-const fs = require('fs');
-const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const USERS_FILE = path.join(__dirname, 'users.json');
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
 const activeSessions = new Map();
 
-function loadUsers() {
-    if (!fs.existsSync(USERS_FILE)) {
-        fs.writeFileSync(USERS_FILE, JSON.stringify({ users: [] }, null, 2));
-    }
-    return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-}
-
-function saveUsers(data) {
-    fs.writeFileSync(USERS_FILE, JSON.stringify(data, null, 2));
-}
 
 function authenticate(req, res, next) {
     const authHeader = req.headers.authorization;
@@ -40,182 +29,393 @@ function authenticate(req, res, next) {
 }
 
 app.post('/api/auth/register', async (req, res) => {
+
     const { username, email, password } = req.body;
+
     if (!username || !email || !password) {
-        return res.status(400).json({ error: 'All fields are required' });
+        return res.status(400).json({
+            error: 'All fields are required'
+        });
     }
+
     if (password.length < 6) {
-        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+        return res.status(400).json({
+            error: 'Password must be at least 6 characters'
+        });
     }
-    const data = loadUsers();
-    const existingEmail = data.users.find(u => u.email === email.toLowerCase());
-    const existingUsername = data.users.find(u => u.username.toLowerCase() === username.toLowerCase());
-    if (existingEmail) {
-        return res.status(409).json({ error: 'Email already registered' });
+
+    try {
+
+        const existing = await pool.query(
+            `
+            SELECT id
+            FROM users
+            WHERE email=$1 OR username=$2
+            `,
+            [email.toLowerCase(), username]
+        );
+
+        if (existing.rows.length) {
+            return res.status(409).json({
+                error: 'Email or username already exists'
+            });
+        }
+
+        const hashedPassword =
+            await bcrypt.hash(password, 10);
+
+        const id = uuidv4();
+
+        await pool.query(
+            `
+            INSERT INTO users
+            (
+                id,
+                username,
+                email,
+                password
+            )
+            VALUES
+            ($1,$2,$3,$4)
+            `,
+            [
+                id,
+                username,
+                email.toLowerCase(),
+                hashedPassword
+            ]
+        );
+
+        const token = uuidv4();
+
+        activeSessions.set(token, id);
+
+        res.status(201).json({
+            token,
+            username,
+            email
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            error: 'Server error'
+        });
     }
-    if (existingUsername) {
-        return res.status(409).json({ error: 'Username already taken' });
-    }
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = {
-        id: uuidv4(),
-        username,
-        email: email.toLowerCase(),
-        password: hashedPassword,
-        progress: {},
-        links: {},
-        createdAt: new Date().toISOString()
-    };
-    data.users.push(user);
-    saveUsers(data);
-    const token = uuidv4();
-    activeSessions.set(token, user.id);
-    res.status(201).json({ token, username: user.username, email: user.email });
 });
 
 app.post('/api/auth/login', async (req, res) => {
+
     const { email, password } = req.body;
+
     if (!email || !password) {
-        return res.status(400).json({ error: 'Email and password are required' });
+        return res.status(400).json({
+            error: 'Email and password are required'
+        });
     }
-    const data = loadUsers();
-    const user = data.users.find(u => u.email === email.toLowerCase());
-    if (!user) {
-        return res.status(401).json({ error: 'Invalid email or password' });
-    }
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) {
-        return res.status(401).json({ error: 'Invalid email or password' });
-    }
-    const token = uuidv4();
-    activeSessions.set(token, user.id);
-    res.json({ token, username: user.username, email: user.email });
-});
 
-app.post('/api/auth/logout', authenticate, (req, res) => {
-    activeSessions.delete(req.token);
-    res.json({ success: true });
-});
+    try {
 
-app.get('/api/user', authenticate, (req, res) => {
-    const data = loadUsers();
-    const user = data.users.find(u => u.id === req.userId);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ username: user.username, email: user.email });
-});
+        const result = await pool.query(
+            `
+            SELECT *
+            FROM users
+            WHERE email=$1
+            `,
+            [email.toLowerCase()]
+        );
 
-app.get('/api/progress', authenticate, (req, res) => {
-    const data = loadUsers();
-    const user = data.users.find(u => u.id === req.userId);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ progress: user.progress || {} });
-});
-
-app.put('/api/progress', authenticate, (req, res) => {
-    const { episodeCode, watched } = req.body;
-    if (!episodeCode) {
-        return res.status(400).json({ error: 'Episode code is required' });
-    }
-    const data = loadUsers();
-    const userIndex = data.users.findIndex(u => u.id === req.userId);
-    if (userIndex === -1) return res.status(404).json({ error: 'User not found' });
-    if (!data.users[userIndex].progress) {
-        data.users[userIndex].progress = {};
-    }
-    if (watched) {
-        data.users[userIndex].progress[episodeCode] = true;
-    } else {
-        delete data.users[userIndex].progress[episodeCode];
-    }
-    saveUsers(data);
-    res.json({ success: true });
-});
-
-app.put('/api/progress/batch', authenticate, (req, res) => {
-    const { updates } = req.body;
-    if (!Array.isArray(updates)) {
-        return res.status(400).json({ error: 'Updates must be an array' });
-    }
-    const data = loadUsers();
-    const userIndex = data.users.findIndex(u => u.id === req.userId);
-    if (userIndex === -1) return res.status(404).json({ error: 'User not found' });
-    if (!data.users[userIndex].progress) {
-        data.users[userIndex].progress = {};
-    }
-    updates.forEach(({ code, watched }) => {
-        if (watched) {
-            data.users[userIndex].progress[code] = true;
-        } else {
-            delete data.users[userIndex].progress[code];
+        if (!result.rows.length) {
+            return res.status(401).json({
+                error: 'Invalid email or password'
+            });
         }
-    });
-    saveUsers(data);
-    res.json({ success: true });
+
+        const user = result.rows[0];
+
+        const valid =
+            await bcrypt.compare(
+                password,
+                user.password
+            );
+
+        if (!valid) {
+            return res.status(401).json({
+                error: 'Invalid email or password'
+            });
+        }
+
+        const token = uuidv4();
+
+        activeSessions.set(
+            token,
+            user.id
+        );
+
+        res.json({
+            token,
+            username: user.username,
+            email: user.email
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            error: 'Server error'
+        });
+    }
+});
+
+app.get('/api/user', authenticate, async (req, res) => {
+
+    try {
+
+        const result = await pool.query(
+            `
+            SELECT username,email
+            FROM users
+            WHERE id=$1
+            `,
+            [req.userId]
+        );
+
+        if (!result.rows.length) {
+            return res.status(404).json({
+                error: 'User not found'
+            });
+        }
+
+        res.json(result.rows[0]);
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            error: 'Server error'
+        });
+    }
+});
+
+app.get('/api/progress', authenticate, async (req, res) => {
+
+    try {
+
+        const result = await pool.query(
+            `
+            SELECT progress
+            FROM users
+            WHERE id=$1
+            `,
+            [req.userId]
+        );
+
+        if (!result.rows.length) {
+            return res.status(404).json({
+                error: 'User not found'
+            });
+        }
+
+        res.json({
+            progress: result.rows[0].progress || {}
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            error: 'Server error'
+        });
+    }
+});
+
+app.put('/api/progress', authenticate, async (req, res) => {
+
+    const { episodeCode, watched } = req.body;
+
+    try {
+
+        const result = await pool.query(
+            `
+            SELECT progress
+            FROM users
+            WHERE id=$1
+            `,
+            [req.userId]
+        );
+
+        if (!result.rows.length) {
+            return res.status(404).json({
+                error: 'User not found'
+            });
+        }
+
+        const progress =
+            result.rows[0].progress || {};
+
+        if (watched) {
+            progress[episodeCode] = true;
+        } else {
+            delete progress[episodeCode];
+        }
+
+        await pool.query(
+            `
+            UPDATE users
+            SET progress=$1
+            WHERE id=$2
+            `,
+            [JSON.stringify(progress), req.userId]
+        );
+
+        res.json({
+            success: true
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            error: 'Server error'
+        });
+    }
+});
+
+app.put('/api/progress/batch', authenticate, async (req, res) => {
+
+    const { updates } = req.body;
+
+    try {
+
+        const result = await pool.query(
+            `
+            SELECT progress
+            FROM users
+            WHERE id=$1
+            `,
+            [req.userId]
+        );
+
+        const progress =
+            result.rows[0].progress || {};
+
+        updates.forEach(update => {
+
+            if (update.watched) {
+                progress[update.code] = true;
+            } else {
+                delete progress[update.code];
+            }
+        });
+
+        await pool.query(
+            `
+            UPDATE users
+            SET progress=$1
+            WHERE id=$2
+            `,
+            [JSON.stringify(progress), req.userId]
+        );
+
+        res.json({
+            success: true
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            error: 'Server error'
+        });
+    }
 });
 
 // =========================
 // LINKS API
 // =========================
 
-app.get('/api/links', authenticate, (req, res) => {
+app.get('/api/links', authenticate, async (req, res) => {
 
-    const data = loadUsers();
+    try {
 
-    const user = data.users.find(u => u.id === req.userId);
+        const result = await pool.query(
+            `
+            SELECT links
+            FROM users
+            WHERE id=$1
+            `,
+            [req.userId]
+        );
 
-    if (!user) {
-        return res.status(404).json({
-            error: 'User not found'
+        res.json({
+            links: result.rows[0].links || {}
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            error: 'Server error'
         });
     }
-
-    res.json({
-        links: user.links || {}
-    });
 });
 
 
-app.put('/api/links', authenticate, (req, res) => {
+app.put('/api/links', authenticate, async (req, res) => {
 
     const { code, url } = req.body;
 
-    if (!code) {
-        return res.status(400).json({
-            error: 'Episode code required'
+    try {
+
+        const result = await pool.query(
+            `
+            SELECT links
+            FROM users
+            WHERE id=$1
+            `,
+            [req.userId]
+        );
+
+        const links =
+            result.rows[0].links || {};
+
+        if (url && url.trim()) {
+            links[code] = url.trim();
+        } else {
+            delete links[code];
+        }
+
+        await pool.query(
+            `
+            UPDATE users
+            SET links=$1
+            WHERE id=$2
+            `,
+            [JSON.stringify(links), req.userId]
+        );
+
+        res.json({
+            success: true
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            error: 'Server error'
         });
     }
-
-    const data = loadUsers();
-
-    const userIndex = data.users.findIndex(
-        u => u.id === req.userId
-    );
-
-    if (userIndex === -1) {
-        return res.status(404).json({
-            error: 'User not found'
-        });
-    }
-
-    if (!data.users[userIndex].links) {
-        data.users[userIndex].links = {};
-    }
-
-    if (url && url.trim()) {
-        data.users[userIndex].links[code] = url.trim();
-    } else {
-        delete data.users[userIndex].links[code];
-    }
-
-    saveUsers(data);
-
-    res.json({
-        success: true
-    });
 });
 
 app.listen(PORT, () => {
     console.log(`Pokemon Tracker running at http://localhost:${PORT}`);
 });
-
-console.log("redeploy test");
