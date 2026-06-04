@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokémon Episode Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nunito:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+</head>
+<body>
+
+    <nav id="navbar">
+        <div class="nav-left">
+            <div class="pokeball-icon"></div>
+            <div class="nav-brand">
+                <span class="nav-title">Pokémon Tracker</span>
+                <span class="nav-subtitle">Complete Watch Guide</span>
+            </div>
+        </div>
+        <div class="nav-center">
+            <div class="search-wrap">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input type="text" id="search-input" placeholder="Search episodes...">
+            </div>
+        </div>
+        <div class="nav-right">
+            <div class="nav-progress" id="nav-progress">
+                <div class="progress-label">
+                    <span id="progress-text">Loading...</span>
+                </div>
+                <div class="progress-bar-wrap">
+                    <div class="progress-bar-fill" id="progress-bar-fill"></div>
+                </div>
+            </div>
+            <button class="btn-auth" id="auth-btn">Login</button>
+        </div>
+    </nav>
+
+    <div class="layout">
+        <aside id="sidebar">
+            <div class="sidebar-tabs">
+                <button class="tab-btn active" data-tab="seasons">Seasons</button>
+                <button class="tab-btn" data-tab="movies">Movies</button>
+                <button class="tab-btn" data-tab="others">Others</button>
+            </div>
+            <div class="series-list" id="series-list">
+                <div class="loading-state">Loading...</div>
+            </div>
+        </aside>
+
+        <main id="main">
+            <div class="main-header">
+                <div class="main-header-left">
+                    <h2 id="section-title">Select a season</h2>
+                    <span class="episode-count" id="episode-count"></span>
+                </div>
+                <div class="main-header-right" id="series-actions"></div>
+            </div>
+            <div id="episode-list">
+                <div class="empty-state">
+                    <div class="empty-icon"></div>
+                    <p>Select a season or series from the sidebar to view episodes.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal" id="auth-modal">
+            <button class="modal-close" id="modal-close">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+            <div class="modal-tabs">
+                <button class="modal-tab active" id="tab-login">Login</button>
+                <button class="modal-tab" id="tab-signup">Sign Up</button>
+            </div>
+
+            <div id="form-login" class="auth-form">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="login-email" placeholder="trainer@pokemon.com">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" placeholder="Enter password">
+                </div>
+                <div class="form-error" id="login-error"></div>
+                <button class="btn-submit" id="btn-login">Login</button>
+            </div>
+
+            <div id="form-signup" class="auth-form hidden">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="signup-username" placeholder="AshKetchum">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="signup-email" placeholder="trainer@pokemon.com">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="signup-password" placeholder="Min. 6 characters">
+                </div>
+                <div class="form-error" id="signup-error"></div>
+                <button class="btn-submit" id="btn-signup">Create Account</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
