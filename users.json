@@ -1,22 +1,4 @@
 {
   "users": [
-    {
-      "id": "2d5e87e3-c318-4caf-b511-cc7e261f07d5",
-      "username": "Ask",
-      "email": "ask@gmail",
-      "password": "$2a$10$FTopPw5vJFL2q19t37t93uFjSFdDPi6y85Fh8rEyVPVrUqckK3pWO",
-      "progress": {},
-      "links": {},
-      "createdAt": "2026-06-04T10:07:25.546Z"
-    },
-    {
-      "id": "f71a3352-941f-45b8-9d3e-549394753ade",
-      "username": "afa",
-      "email": "asf",
-      "password": "$2a$10$JvwVvUWchoxtAt8cMbSAV.0YuBDZH5OOT.TsV4DRawT17HF97vAHe",
-      "progress": {},
-      "sources": {},
-      "createdAt": "2026-06-04T10:37:17.723Z"
-    }
   ]
 }
