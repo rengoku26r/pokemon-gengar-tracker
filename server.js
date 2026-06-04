@@ -1,8 +1,10 @@
 require('dotenv').config();
 const pool = require('./db');
+const path = require('path');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
