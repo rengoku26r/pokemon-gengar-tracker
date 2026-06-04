@@ -217,3 +217,5 @@ app.put('/api/links', authenticate, (req, res) => {
 app.listen(PORT, () => {
     console.log(`Pokemon Tracker running at http://localhost:${PORT}`);
 });
+
+console.log("redeploy test");
